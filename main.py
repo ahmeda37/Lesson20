@@ -1,13 +1,108 @@
 import hashlib
-import randomgit
+import random
 import uuid
 
 from flask import Flask, render_template, request, make_response, redirect, url_for
-from models import User, db
+from models import User, Message, db
 
 app = Flask(__name__)
 db.create_all()  # create (new) tables in the database
+#RESTful API
+# Create
+# Read
+# Update
+# Delete
 
+@app.route("/message", methods=["GET", "POST"])
+def message():
+    session_token = request.cookies.get("session_token")
+
+    user = db.query(User).filter_by(session_token=session_token).first()
+
+    if request.method == "POST":
+        reciever = int(request.form.get("reciever"))
+        message_body = request.form.get("message-body")
+
+        message = Message(sender=user.id, receiver=reciever, messageBody = message_body)
+
+        db.add(message)
+        db.commit
+        return redirect(url_for('index'))
+    else:
+        return render_template("message.html", user=user)
+
+
+
+# Read route
+@app.route("/profile", methods=["GET"])
+def profile():
+    session_token = request.cookies.get("session_token")
+
+    user = db.query(User).filter_by(session_token=session_token).first()
+
+    if user:
+        return render_template("profile.html", user=user)
+    else:
+        return redirect(url_for("index"))
+
+#EDIT route
+@app.route("/profile/edit", methods=["GET","POST"])
+def profile_edit():
+    session_token = request.cookies.get("session_token")
+
+    user = db.query(User).filter_by(session_token=session_token).first()
+
+    if request.method == "GET":
+        if user:
+            return render_template("profile_edit.html", user=user)
+        else:
+            return redirect(url_for("index"))
+    elif request.method == "POST":
+        name = request.form.get("profile-name")
+        email = request.form.get("profile-email")
+
+        #update the user object
+        user.name = name
+        user.email = email
+
+        #store changes
+        db.add(user)
+        db.commit()
+
+        return redirect(url_for("profile"))
+
+
+@app.route("/profile/delete", methods=["GET", "POST"])
+def profile_delete():
+    session_token = request.cookies.get("session_token")
+
+    user = db.query(User).filter_by(session_token=session_token).first()
+
+    if request.method == "GET":
+        if user:
+            return render_template("profile_delete.html", user=user)
+        else:
+            return redirect(url_for("index"))
+    elif request.method == "POST":
+        db.delete(user)
+        db.commit()
+
+        # delete cookie
+        response = make_response()
+        response.set_cookie("session_token", expires=0)
+
+        return redirect(url_for("index"))
+
+@app.route("/users", methods=["GET"])
+def all_users():
+    users = db.query(User).all()
+
+    return render_template("users.html", users = users)
+
+@app.route("/user/<user_id>", methods=["GET"])
+def user_details(user_id):
+    user = db.query(User).get(int(user_id))
+    return render_template("user_details.html", user=user)
 
 @app.route("/", methods=["GET"])
 def index():
